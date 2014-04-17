@@ -85,6 +85,13 @@ formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w 
 	
 	--test-- "mold-string6"
 	--assert {"abc^^(10000)def"} = mold/all "abc^(010000)def"
+	
+	--test-- "mold-string6"
+		--assert {"目录1"} = mold "目录1"
+		
+	--test-- "mold-string7"
+		--assert {"%e录1"} = mold "%e录1"
+ 
 ===end-group===
 
 ===start-group=== "logic"
@@ -117,6 +124,19 @@ formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w 
  
 ===end-group===
 
+===start-group=== "file"
+
+	--test-- "mold-file1"
+		--assert "%目录1" = mold %目录1
+		
+	--test-- "mold-file2"
+		--assert "%^^(76EE)^^(5F55)1" = mold/all %目录1
+
+	--test-- "mold-file3"
+		--assert "%a%20b" = mold %a%20b
+
+===end-group===
+
 ===start-group=== "mold/only"
 	--test-- "mold/only-1 issue #458"
 	--assert "a [b] c" = mold/only [a [b] c]
@@ -131,6 +151,28 @@ formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w 
 	--assert "a" = mold/only [a]
 	--test-- "mold/only-5"
 	--assert "a [b] c [d [e] f] g" = mold/only [a [b] c [d [e] f] g]
+===end-group===
+
+===start-group=== "mold/all"
+	--test-- "mold/all-1"
+		--assert  {"^^(76EE)^^(5F55)1"} = mold/all "目录1"
+===end-group===
+
+===start-group=== "dehex"
+	--test-- "dehex-1"
+		--assert  "a b" = dehex "a%20b"
+	--test-- "dehex-2"
+		--assert  "a%2目b" = dehex "a%2目b"
+	--test-- "dehex-3"
+		--assert  "a^@b" = dehex "a%00b"
+	--test-- "dehex-4"
+		--assert  "a%~b" = dehex "a%~b"
+	--test-- "dehex-5"
+		--assert  "aβc" = dehex "a%ce%b2c"
+	--test-- "dehex-6"
+		--assert  "a乱码b" = dehex "a%e4%b9%b1%e7%a0%81b"
+	--test-- "dehex-7"
+		--assert  "a%ceb2b" = dehex "a%ceb2b"
 ===end-group===
 
 ~~~end-file~~~

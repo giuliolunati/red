@@ -881,6 +881,22 @@ make-profilable make target-class [
 		if PIC? [emit-i32 #{e0800009}]				;-- ADD r0, sb
 	]
 	
+	emit-access-register: func [reg [word!] set? [logic!] value /local opcode][
+		if verbose >= 3 [print [">>>emitting ACCESS-REGISTER" mold value]]
+		if all [set? not tag? value][emit-load value]
+
+		unless reg = 'r0 [
+			opcode: copy #{e1a00000}
+			reg: to integer! next form reg
+			either set? [
+				opcode/3: to char! shift/left reg 4
+			][
+				opcode/4: to char! reg
+			]
+			emit-i32 opcode							;-- MOV <reg>, r0	; set
+		]											;-- MOV r0, <reg>	; get
+	]
+	
 	emit-fpu-get: func [/type][
 		case [
 			type [
@@ -1561,8 +1577,8 @@ make-profilable make target-class [
 		/local mod? scale c type arg2 op-poly
 	][
 		;-- r0 = a, r1 = b
-		if find [// ///] name [						;-- work around unaccepted '// and '///
-			mod?: select [// mod /// rem] name		;-- convert operators to words (easier to handle)
+		if find mod-rem-op name [					;-- work around unaccepted '// and '%
+			mod?: select mod-rem-func name			;-- convert operators to words (easier to handle)
 			name: first [/]							;-- work around unaccepted '/ 
 		]
 		arg2: compiler/unbox args/2
@@ -1888,7 +1904,7 @@ make-profilable make target-class [
 			]
 			find math-op name [
 				either width = 8 [
-					either find [/// //] name [
+					either find mod-rem-op name [
 						emit-i32 #{ee802b01}		;-- FDIVD  d2, d0, d1
 						emit-i32 #{eebd4bc2}		;-- FTOSID s8, d2		; round towards 0
 						emit-i32 #{eeb02b40}		;-- FCPYD  d2, d0		; d2 = dividend
@@ -1904,7 +1920,7 @@ make-profilable make target-class [
 					]
 					emit-i32 #{ec510b12}			;-- FMRRD r0, r1, d2	; move result to CPU
 				][
-					either find [/// //] name [
+					either find mod-rem-op name [
 						emit-i32 #{ee802a01}		;-- FDIVS  s4, s0, s2
 						emit-i32 #{eebd4ac2}		;-- FTOSIS s8, s4		; round towards 0
 						emit-i32 #{eeb02a40}		;-- FCPYS  s4, s0		; s4 = dividend

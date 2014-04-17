@@ -15,8 +15,17 @@ string: context [
 	
 	#define BRACES_THRESHOLD	50						;-- max string length for using " delimiter
 	#define MAX_ESC_CHARS		5Fh	
+	#define MAX_URL_CHARS 		7Fh
 	
-	escape-chars: declare byte-ptr!
+	escape-chars:		declare byte-ptr!
+	escape-url-chars:	declare byte-ptr!
+	utf8-buffer: 		declare byte-ptr!
+
+	#enum escape-type! [
+		ESC_CHAR: 7Eh
+		ESC_URL
+		ESC_NONE: FFh
+	]
 
 	fill-table: func [
 		/local
@@ -24,7 +33,7 @@ string: context [
 			i [integer!]
 	][
 		i: 1
-		c:  #"@"
+		c: #"@"
 		while [c <= #"_"][
 			escape-chars/i: c
 			i: i + 1
@@ -41,7 +50,62 @@ string: context [
 		escape-chars/35: #"^""							;-- 34 + 1 (adjust for 1-base)
 		escape-chars/95: #"^^"							;-- 94 + 1 (adjust for 1-base)
 	]
-	
+
+	fill-url-table: func [
+		/local
+			c [byte!]
+			i [integer!]
+			n [integer!]
+			s [c-string!]
+	][
+		i: 1
+		c: #"^@"
+		while [c <= #" "][
+			escape-url-chars/i: as byte! ESC_URL
+			i: i + 1
+			c: c + 1
+		]
+
+		while [i <= MAX_URL_CHARS][
+			escape-url-chars/i: as byte! ESC_NONE
+			i: i + 1
+		]
+
+		i: (as-integer #"0") + 1					;-- adjust for 1-base
+		c: #"0"
+		while [c <= #"9"][
+			escape-url-chars/i: c - #"0"
+			i: i + 1
+			c: c + 1
+		]
+
+		i: (as-integer #"a") + 1
+		c: #"a"
+		while [c <= #"f"][
+			escape-url-chars/i: c - #"a" + 10
+			i: i + 1
+			c: c + 1
+		]
+
+		i: (as-integer #"A") + 1
+		c: #"A"
+		while [c <= #"F"][
+			escape-url-chars/i: c - #"A" + 10
+			i: i + 1
+			c: c + 1
+		]
+
+		s: "^"%();<>[]{}E"
+		i: 1
+		until [
+			c: s/i + 1
+			n: as-integer c
+			escape-url-chars/n: as byte! ESC_URL
+			i: i + 1
+			s/i = #"E"
+		]
+	]
+
 	to-hex: func [
 		cp		[integer!]								;-- codepoint <= 10FFFFh
 		return: [c-string!]
@@ -71,7 +135,80 @@ string: context [
 		]
 		s + c
 	]
-	
+
+	get-utf8-size: func [
+		byte-1st	[integer!]
+		return:		[integer!]
+	][
+		;@@ In function unicode/decode-utf8-char
+		;@@ support up to four bytes in a UTF-8 sequence
+		;if byte-1st and FCh = FCh [return 6]
+		;if byte-1st and F8h = F8h [return 5]
+		if byte-1st and F0h = F0h [return 4]
+		if byte-1st and E0h = E0h [return 3]
+		if byte-1st and C0h = C0h [return 2]
+		0
+	]
+
+	decode-utf8-hex: func [
+		p			[byte-ptr!]
+		unit		[integer!]
+		cp			[int-ptr!]
+		trailing?	[logic!]
+		return: 	[byte-ptr!]
+		/local
+			i		[integer!]
+			v1		[integer!]
+			v2		[integer!]
+			size	[integer!]
+			src		[byte-ptr!]
+			buffer	[byte-ptr!]
+	][
+		v1: (get-char p unit) + 1						;-- adjust for 1-base
+		if v1 > MAX_URL_CHARS [return p]
+
+		v2: (get-char p + unit unit) + 1				;-- adjust for 1-base
+		if v2 > MAX_URL_CHARS [return p]
+
+		v1: as-integer escape-url-chars/v1
+		if any [
+			v1 = ESC_NONE
+			v1 = ESC_URL
+		][return p]
+
+		v2: as-integer escape-url-chars/v2
+		if any [
+			v2 = ESC_NONE
+			v2 = ESC_URL
+		][return p]
+
+		v1: v1 << 4 + v2
+		src: p + (unit << 1)
+
+		if trailing? [cp/value: v1 return src]
+
+		either v1 <= 7Fh [
+			cp/value: v1
+			p: src
+		][
+			i: 1
+			buffer: utf8-buffer
+			size: get-utf8-size v1
+			v2: size
+			while [buffer/i: as byte! v1 v2 > 1][
+				if (as-integer #"%") <> get-char src unit [return p]
+				src: decode-utf8-hex src + unit unit :v1 true
+				i: i + 1
+				v2: v2 - 1
+			]
+			if positive? size [
+				v1: unicode/decode-utf8-char as c-string! buffer :size
+			]
+			if positive? size [cp/value: v1 p: src]
+		]
+		p
+	]
+
 	rs-length?: func [
 		str	    [red-string!]
 		return: [integer!]
@@ -811,6 +948,7 @@ string: context [
 	append-escaped-char: func [
 		buffer	[red-string!]
 		cp	    [integer!]
+		type	[integer!]
 		all?	[logic!]
 		/local
 			idx [integer!]
@@ -823,9 +961,17 @@ string: context [
 				concatenate-literal buffer to-hex cp
 				append-char GET_BUFFER(buffer) as-integer #")"
 			]
-			all [cp < MAX_ESC_CHARS escape-chars/idx <> null-byte][
+			all [type = ESC_CHAR cp < MAX_ESC_CHARS escape-chars/idx <> null-byte][
 				append-char GET_BUFFER(buffer) as-integer #"^^"
 				append-char GET_BUFFER(buffer) as-integer escape-chars/idx
+			]
+			all [
+				type = ESC_URL
+				cp < MAX_URL_CHARS
+				escape-url-chars/idx = (as byte! ESC_URL)
+			][
+				append-char GET_BUFFER(buffer) as-integer #"%"
+				concatenate-literal buffer to-hex cp
 			]
 			true [
 				append-char GET_BUFFER(buffer) cp
@@ -877,12 +1023,12 @@ string: context [
 			either negative? part [p][p + (part << (unit >> 1))]
 		]
 		if tail > as byte-ptr! s/tail [tail: as byte-ptr! s/tail]
-		
+
 		curly: 0
 		quote: 0
 		nl:    0
 		sniff-chars p tail unit :curly :quote :nl
-		
+
 		either any [
 			nl >= 3
 			negative? curly
@@ -895,7 +1041,7 @@ string: context [
 			open:  #"^""
 			close: #"^""
 		]
-		
+
 		append-char GET_BUFFER(buffer) as-integer open
 		
 		while [p < tail][
@@ -912,14 +1058,14 @@ string: context [
 					]
 					#"^""	[append-char GET_BUFFER(buffer) cp]
 					#"^^"	[concatenate-literal buffer "^^^^"]
-					default [append-escaped-char buffer cp all?]
+					default [append-escaped-char buffer cp ESC_CHAR all?]
 				]
 			][
-				append-escaped-char buffer cp all?
+				append-escaped-char buffer cp ESC_CHAR all?
 			]
 			p: p + unit
 		]
-		
+
 		append-char GET_BUFFER(buffer) as-integer close
 		part - ((as-integer tail - head) >> (unit >> 1)) - 2
 	]
@@ -1159,11 +1305,18 @@ string: context [
 		result: stack/push as red-value! str
 		
 		s: GET_BUFFER(str)
-		if s/offset = s/tail [							;-- early exit if string is empty
+		unit: GET_UNIT(s)
+		buffer: (as byte-ptr! s/offset) + (str/head << (unit >> 1))
+		end: as byte-ptr! s/tail
+
+		if any [							;-- early exit if string is empty or at tail
+			s/offset = s/tail
+			all [not reverse? buffer >= end]
+		][
 			result/header: TYPE_NONE
 			return result
 		]
-		unit: GET_UNIT(s)
+
 		step: 1
 		part?: no
 
@@ -1665,7 +1818,7 @@ string: context [
 			move-memory 
 				head
 				head + part
-				as-integer tail - (head + part)
+				as-integer tail - (head + part) + unit ;-- size including trailing NUL
 		]
 		s/tail: as red-value! tail - part
 		str
@@ -1745,8 +1898,11 @@ string: context [
 	
 	init: does [
 		escape-chars: allocate MAX_ESC_CHARS
+		escape-url-chars: allocate MAX_URL_CHARS + 4	;-- extra buffer for converting utf8 string
+		utf8-buffer: escape-url-chars + MAX_URL_CHARS
 		fill-table
-	
+		fill-url-table
+
 		datatype/register [
 			TYPE_STRING
 			TYPE_VALUE

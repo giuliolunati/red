@@ -318,6 +318,18 @@ make-profilable make target-class [
 		]
 	]
 	
+	emit-access-register: func [reg [word!] set? [logic!] value /local opcode][
+		if verbose >= 3 [print [">>>emitting ACCESS-REGISTER" mold value]]
+		if all [set? not tag? value][emit-load value]
+		
+		unless reg = 'eax [
+			opcode: #"^(C0)"
+			reg: (index? find [eax ecx edx ebx esp ebp esi edi] reg) - 1
+			unless set? [reg: shift/left reg 3]
+			emit join #{89} opcode or reg			;-- MOV <reg>, eax	; set
+		]											;-- MOV eax, <reg>	; get
+	]
+	
 	emit-fpu-set: func [
 		value
 		/options option [word!]
@@ -1148,8 +1160,8 @@ make-profilable make target-class [
 		/local mod? scale c type arg2 op-poly
 	][
 		;-- eax = a, edx = b
-		if find [// ///] name [						;-- work around unaccepted '// and '///
-			mod?: select [// mod /// rem] name		;-- convert operators to words (easier to handle)
+		if find mod-rem-op name [					;-- work around unaccepted '// and '%
+			mod?: select mod-rem-func name			;-- convert operators to words (easier to handle)
 			name: first [/]							;-- work around unaccepted '/ 
 		]
 		arg2: compiler/unbox args/2
@@ -1428,8 +1440,8 @@ make-profilable make target-class [
 			compiler/throw-error "unsupported operation with float numbers"
 		]
 		
-		if find [// ///] name [						;-- work around unaccepted '// and '///
-			mod?: select [// mod /// rem] name		;-- convert operators to words (easier to handle)
+		if find mod-rem-op name [					;-- work around unaccepted '// and '%
+			mod?: select mod-rem-func name			;-- convert operators to words (easier to handle)
 			name: first [/]							;-- work around unaccepted '/ 
 		]
 		set-width args/1

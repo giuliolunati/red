@@ -824,7 +824,7 @@ red: context [
 			output: saved
 	]
 	
-	comp-literal: func [root? [logic!] /local value char? name w make-block][
+	comp-literal: func [root? [logic!] /inactive /local value char? name w make-block type][
 		value: pc/1
 		either any [
 			char?: unicode-char? value
@@ -840,11 +840,21 @@ red: context [
 					emit to integer! next value
 					insert-lf -2
 				]
-				find [refinement! issue!] type?/word :value [
+				find [refinement! issue! lit-word!] type?/word :value [
 					add-symbol w: to word! form value
-					emit to path! reduce [to word! form type? value 'push]
-					emit to path! reduce ['exec decorate-symbol w]
-					insert-lf -2
+					type: to word! form type? :value
+					if all [lit-word? :value not inactive][type: 'word]
+					
+					either all [not issue? :value local-word? w][
+						emit append to path! type 'push-local
+						emit last ctx-stack
+						emit get-word-index w
+						insert-lf -3
+					][
+						emit to path! reduce [type 'push]
+						emit to path! reduce ['exec decorate-symbol w]
+						insert-lf -2
+					]
 				]
 				none? :value [
 					emit 'none/push
@@ -1719,7 +1729,7 @@ red: context [
 						]
 					]
 				]
-				get-word! [comp-literal no]
+				get-word! [comp-literal/inactive no]
 				word!     [comp-expression]
 			]
 			spec: next spec
@@ -1948,7 +1958,7 @@ red: context [
 		]
 	]
 	
-	check-infix-operators: has [name op pos end ops][
+	check-infix-operators: has [name op pos end ops spec][
 		if infix? pc [return false]						;-- infix op already processed,
 														;-- or used in prefix mode.
 		if infix? next pc [
@@ -1971,8 +1981,16 @@ red: context [
 			
 			forall ops [
 				comp-expression/no-infix				;-- fetch right operand
-				emit make-func-prefix ops/1
-				insert-lf -1
+				name: ops/1
+				spec: functions/:name
+				switch/default spec/1 [
+					function! [emit decorate-func name insert-lf -1]
+					routine!  [emit-routine name spec/3]
+				][
+					emit make-func-prefix name
+					insert-lf -1
+				]
+				
 				emit-close-frame
 				unless tail? next ops [pc: next pc]		;-- jump over op word unless last operand
 			]
@@ -2106,7 +2124,7 @@ red: context [
 				true
 			]
 			#load [										;-- temporary directive
-				change/part/only pc to do pc/2 pc/3 3 2
+				change/part/only pc to do pc/2 pc/3 3
 				comp-expression							;-- continue expression fetching
 				true
 			]

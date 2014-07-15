@@ -160,68 +160,11 @@ crypto: context [
 			hash
 		]
 	]
-	Syllable [
-		;-- Have no idea, Is it the same as Linux ?
-		--NOT_IMPLEMENTED--
-	]
-	MacOSX	 [
-		;-- Using Common Crypto -- libSystem digest library
-		--NOT_IMPLEMENTED--
-	]
-	Android [
-		;-- Using OpenSSL Crypto library
-		#import [
-			"libcrypto.so" cdecl [
-				compute-md5: "MD5" [
-					data	[byte-ptr!]
-					len		[integer!]
-					output	[byte-ptr!]
-					return: [byte-ptr!]
-				]
-				compute-sha1: "SHA1" [
-					data	[byte-ptr!]
-					len		[integer!]
-					output	[byte-ptr!]
-					return: [byte-ptr!]
-				]
-			]
-		]
-
-		;typedef struct MD5state_st						;-- 92 bytes
-		;	{
-		;	MD5_LONG A,B,C,D;
-		;	MD5_LONG Nl,Nh;
-		;	MD5_LONG data[MD5_LBLOCK];
-		;	unsigned int num;
-		;	} MD5_CTX;
-
-		get-digest: func [
-			data		[byte-ptr!]
-			len			[integer!]
-			type		[integer!]
-			return:		[byte-ptr!]
-			/local
-				fd		[integer!]
-				opfd	[integer!]
-				sa		[byte-ptr!]
-				alg		[c-string!]
-				hash	[byte-ptr!]
-				size	[integer!]
-		][
-			hash: as byte-ptr! "0000000000000000000"
-			either type = ALG_MD5 [
-				compute-md5 data len hash
-			][
-				compute-sha1 data len hash
-			]
-			hash
-		]
-	]
 	FreeBSD [
 		;-- Using libmd.so
 		--NOT_IMPLEMENTED--
 	]
-	#default [											;-- Linux
+	Linux [
 		;-- Using User-space interface for Kernel Crypto API
 		;-- Exists in kernel starting from Linux 2.6.38
 		#import [
@@ -302,6 +245,60 @@ crypto: context [
 			close opfd
 			close fd
 			free sa
+			hash
+		]
+	]
+	#default [											;-- MacOSX,Android,Syllable
+		;-- Using OpenSSL Crypto library
+		#either OS = 'MacOSX [
+			#define LIBCRYPTO-file "libcrypto.dylib"
+		][
+			#define LIBCRYPTO-file "libcrypto.so"
+		]
+		#import [
+			LIBCRYPTO-file cdecl [
+				compute-md5: "MD5" [
+					data	[byte-ptr!]
+					len		[integer!]
+					output	[byte-ptr!]
+					return: [byte-ptr!]
+				]
+				compute-sha1: "SHA1" [
+					data	[byte-ptr!]
+					len		[integer!]
+					output	[byte-ptr!]
+					return: [byte-ptr!]
+				]
+			]
+		]
+
+		;typedef struct MD5state_st						;-- 92 bytes
+		;	{
+		;	MD5_LONG A,B,C,D;
+		;	MD5_LONG Nl,Nh;
+		;	MD5_LONG data[MD5_LBLOCK];
+		;	unsigned int num;
+		;	} MD5_CTX;
+
+		get-digest: func [
+			data		[byte-ptr!]
+			len			[integer!]
+			type		[integer!]
+			return:		[byte-ptr!]
+			/local
+				fd		[integer!]
+				opfd	[integer!]
+				sa		[byte-ptr!]
+				alg		[c-string!]
+				hash	[byte-ptr!]
+				size	[integer!]
+		][
+			hash: as byte-ptr! "0000000000000000000"
+			either type = ALG_MD5 [
+				compute-md5 data len hash
+			][
+				compute-sha1 data len hash
+			]
 			hash
 		]
 	]]

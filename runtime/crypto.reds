@@ -160,10 +160,6 @@ crypto: context [
 			hash
 		]
 	]
-	FreeBSD [
-		;-- Using libmd.so
-		--NOT_IMPLEMENTED--
-	]
 	Linux [
 		;-- Using User-space interface for Kernel Crypto API
 		;-- Exists in kernel starting from Linux 2.6.38
@@ -248,12 +244,18 @@ crypto: context [
 			hash
 		]
 	]
-	#default [											;-- MacOSX,Android,Syllable
+	#default [											;-- MacOSX,Android,Syllable,FreeBSD
 		;-- Using OpenSSL Crypto library
-		#either OS = 'MacOSX [
-			#define LIBCRYPTO-file "libcrypto.dylib"
-		][
-			#define LIBCRYPTO-file "libcrypto.so"
+		#switch OS [
+			MacOSX [
+				#define LIBCRYPTO-file "libcrypto.dylib"
+			]
+			FreeBSD [
+				#define LIBCRYPTO-file "libcrypto.so.7"
+			]
+			#default [
+				#define LIBCRYPTO-file "libcrypto.so"
+			]
 		]
 		#import [
 			LIBCRYPTO-file cdecl [

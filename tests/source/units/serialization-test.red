@@ -17,7 +17,7 @@ blk: [
 ]
 
 molded: {[1 none true false #"c" "red" Red a/b 'a/b :a/b a/b: (1 + 2) [a] [[[]]] [[[a]]] [c [d [b] e] f] :w 'w w: /w :word 'word word: /word]}
-formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w w w word word word word}
+formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a  a c d b e f w w w w word word word word}
 
 ===start-group=== "Basic MOLD tests"
 
@@ -63,7 +63,7 @@ formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w 
 	]
 	
 	--test-- "form-5"
-	--assert "a a" = form [[""] [a] [] [a] [[[]]]]
+	--assert " a  a " = form [[""] [a] [] [a] [[[]]]]
 	
 ===end-group===
 
@@ -173,6 +173,15 @@ formed: {1 none true false c red Red a/b 'a/b :a/b a/b: 1 + 2 a a c d b e f w w 
 		--assert  "a乱码b" = dehex "a%e4%b9%b1%e7%a0%81b"
 	--test-- "dehex-7"
 		--assert  "a%ceb2b" = dehex "a%ceb2b"
+===end-group===
+
+===start-group=== "to-hex"
+	--test-- "to-hex-1"
+		--assert  #00000000 = to-hex 0
+	--test-- "to-hex-2"
+		--assert  #FFFFFFFE = to-hex -2
+	--test-- "to-hex-3"
+		--assert  #0F = to-hex/size 15 2
 ===end-group===
 
 ~~~end-file~~~

@@ -39,9 +39,11 @@ Red/System [
 	TYPE_ROUTINE
 	TYPE_ISSUE
 	TYPE_FILE
+	TYPE_URL
 	TYPE_BITSET
 	TYPE_POINT
 	TYPE_OBJECT
+	TYPE_FLOAT
 	TYPE_BINARY
 	
 	TYPE_TYPESET
@@ -51,7 +53,7 @@ Red/System [
 
 	TYPE_PORT
 
-	TYPE_FLOAT
+	
 ]
 
 #enum actions! [
@@ -180,6 +182,15 @@ Red/System [
 	NAT_POSITIVE?
 	NAT_MAX
 	NAT_MIN
+	NAT_SHIFT
+	NAT_TO_HEX
+	NAT_SINE
+	NAT_COSINE
+	NAT_TANGENT
+	NAT_ARCSINE
+	NAT_ARCCOSINE
+	NAT_ARCTANGENT
+	NAT_NAN?
 ]
 
 #enum math-op! [
@@ -188,6 +199,10 @@ Red/System [
 	OP_MUL
 	OP_DIV
 	OP_REM
+	;-- bitwise op!
+	OP_OR
+	OP_AND
+	OP_XOR
 ]
 
 #enum comparison-op! [
@@ -229,6 +244,53 @@ Red/System [
 #define GET_CTX(obj)		(as red-context! ((as series! obj/ctx/value) + 1))
 #define FLAG_NOT?(s)		(s/flags and flag-bitset-not <> 0)
 #define SET_RETURN(value)	[stack/set-last as red-value! value]
+
+#define WHITE_CHAR?(char)	[
+	any [
+		all [0 < char char < 33]			;-- All white chars: NL, CR, BS, etc...
+		char = 133							;-- #"^(85)"
+		char = 160							;-- #"^(A0)"
+		char = 5760							;-- #"^(1680)"
+		char = 6158							;-- #"^(180E)"
+		all [8192 <= char char <= 8202]		;-- #"^(2000)" - #"^(200A)"
+		char = 8232							;-- #"^(2028)"
+		char = 8233							;-- #"^(2029)"
+		char = 8239							;-- #"^(202F)"
+		char = 8287							;-- #"^(205F)"
+		char = 12288						;-- #"^(3000)"
+	]
+]
+
+#define SPACE_CHAR?(char)	[
+	any [
+		char = 32							;-- #" "
+		char = 9							;-- #"^-"
+		char = 133							;-- #"^(85)"
+		char = 160							;-- #"^(A0)"
+		char = 5760							;-- #"^(1680)"
+		char = 6158							;-- #"^(180E)"
+		all [8192 <= char char <= 8202]		;-- #"^(2000)" - #"^(200A)"
+		char = 8232							;-- #"^(2028)"
+		char = 8233							;-- #"^(2029)"
+		char = 8239							;-- #"^(202F)"
+		char = 8287							;-- #"^(205F)"
+		char = 12288						;-- #"^(3000)"
+	]
+]
+
+#define ANY_SERIES?(type)	[
+	any [
+		type = TYPE_BLOCK
+		type = TYPE_PAREN
+		type = TYPE_PATH
+		type = TYPE_LIT_PATH
+		type = TYPE_SET_PATH
+		type = TYPE_GET_PATH
+		type = TYPE_STRING
+		type = TYPE_FILE
+		type = TYPE_URL
+	]
+]
 
 #define BS_SET_BIT(array bit)  [
 	pos: array + (bit >> 3)

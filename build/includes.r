@@ -25,6 +25,7 @@ write %build/bin/sources.r set-cache [
 		%macros.reds
 		%natives.reds
 		%parse.reds
+		%random.reds
 		%red.reds
 		%stack.reds
 		%stack.reds
@@ -40,6 +41,7 @@ write %build/bin/sources.r set-cache [
 			%context.reds
 			%datatype.reds
 			%file.reds
+			%float.reds
 			%function.reds
 			%get-path.reds
 			%get-word.reds
@@ -63,6 +65,7 @@ write %build/bin/sources.r set-cache [
 			%structures.reds
 			%symbol.reds
 			%unset.reds
+			%url.reds
 			%word.reds
 		]
 		%platform/ [
@@ -73,13 +76,14 @@ write %build/bin/sources.r set-cache [
 			%syllable.reds
 			%win32.reds
 		]
+		%console/ [
+			%console.red
+			%help.red
+			%input.red
+		]
 	]
 	%utils/ [
 		%extractor.r
-	]
-	%tests/ [
-		%console.red
-		%help.red
 	]
 	%system/ [
 		%compiler.r
@@ -89,15 +93,17 @@ write %build/bin/sources.r set-cache [
 		%loader.r
 		%runtime/ [
 			%android.reds
-			%BSD.reds
 			%common.reds
 			%darwin.reds
 			%debug.reds
+			%freebsd.reds
 			%libc.reds
 			%lib-names.reds
 			%lib-natives.reds
 			%linux.reds
+			%linux-sigaction.reds
 			%POSIX.reds
+			%POSIX-signals.reds
 			%start.reds
 			%syllable.reds
 			%system.reds

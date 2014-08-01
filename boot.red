@@ -24,6 +24,7 @@ word!:			make datatype! #get-definition TYPE_WORD
 ;error!:		make datatype! #get-definition TYPE_ERROR
 ;typeset!:		make datatype! #get-definition TYPE_TYPESET
 file!:			make datatype! #get-definition TYPE_FILE
+url!:			make datatype! #get-definition TYPE_URL
 
 set-word!:		make datatype! #get-definition TYPE_SET_WORD
 get-word!:		make datatype! #get-definition TYPE_GET_WORD
@@ -46,7 +47,7 @@ routine!:		make datatype! #get-definition TYPE_ROUTINE
 object!:		make datatype! #get-definition TYPE_OBJECT
 ;port!:			make datatype! #get-definition TYPE_PORT
 bitset!:		make datatype! #get-definition TYPE_BITSET
-;float!:		make datatype! #get-definition TYPE_FLOAT
+float!:			make datatype! #get-definition TYPE_FLOAT
 point!:			make datatype! #get-definition TYPE_POINT
 
 none:  			make none! 0
@@ -69,8 +70,16 @@ make: make action! [[									;--	this one works!	;-)
 	#get-definition ACT_MAKE
 ]
 
-
-;random
+random: make action! [[
+		"Returns a random value of the same datatype; or shuffles series."
+		value   [any-type!] "Maximum value of result (modified when series)"
+		/seed   "Restart or randomize"
+		/secure "TBD: Returns a cryptographically secure random number"
+		/only	"Pick a random value from a series"
+		return:	[any-type!]
+	]
+	#get-definition ACT_RANDOM
+]
 
 reflect: make action! [[
 		"Returns internal details about a value via reflection."
@@ -80,7 +89,13 @@ reflect: make action! [[
 	#get-definition ACT_REFLECT
 ]
 
-;to
+to: make action! [[
+		"Converts to a specified datatype."
+		type	[any-type!] "The datatype or example value"
+		spec	[any-type!] "The attributes of the new value"
+	]
+	#get-definition ACT_TO
+]
 
 form: make action! [[
 		"Returns a user-friendly string representation of a value."
@@ -108,8 +123,7 @@ mold: make action! [[
 ;-- Scalar actions --
 
 absolute: make action! [[
-		"(not yet implemented)"
-		;"Returns the non-negative value."
+		"Returns the non-negative value."
 		value	 [number!]
 		return:  [number!]
 	]
@@ -152,8 +166,7 @@ negate: make action! [[
 ]
 
 power: make action! [[
-		"(not yet implemented)"
-		;"Returns a number raised to a given power (exponent)."
+		"Returns a number raised to a given power (exponent)."
 		number	 [number!] "Base value."
 		exponent [number!] "The power (index) to raise the base value by."
 		return:	 [number!]
@@ -226,7 +239,14 @@ odd?: make action! [[
 
 ;-- Bitwise actions --
 
-;and~
+and~: make action! [[
+		"Returns the first value ANDed with the second."
+		value1	[logic! integer! char! bitset! typeset!]
+		value2	[logic! integer! char! bitset! typeset!]
+		return:	[logic! integer! char! bitset! typeset!]
+	]
+	#get-definition ACT_AND~
+]
 
 complement: make action! [[
 		"Returns the opposite (complementing) value of the input value."
@@ -236,8 +256,23 @@ complement: make action! [[
 	#get-definition ACT_COMPLEMENT
 ]
 
-;or~
-;xor~
+or~: make action! [[
+		"Returns the first value ORed with the second."
+		value1	[logic! integer! char! bitset! typeset!]
+		value2	[logic! integer! char! bitset! typeset!]
+		return:	[logic! integer! char! bitset! typeset!]
+	]
+	#get-definition ACT_OR~
+]
+
+xor~: make action! [[
+		"Returns the first value exclusive ORed with the second."
+		value1	[logic! integer! char! bitset! typeset!]
+		value2	[logic! integer! char! bitset! typeset!]
+		return:	[logic! integer! char! bitset! typeset!]
+	]
+	#get-definition ACT_XOR~
+]
 
 ;-- Series actions --
 
@@ -400,7 +435,15 @@ remove: make action! [[
 	#get-definition ACT_REMOVE
 ]
 
-;reverse
+reverse: make action! [[
+		"Reverses the order of elements; returns at same position."
+		series	 [series! gob! tuple! pair!]
+		/part "Limits to a given length or position"
+			length [number! series!]
+		return:  [series! gob! tuple! pair!]
+	]
+	#get-definition ACT_REVERSE
+]
 
 select: make action! [[
 		"Find a value in a series and return the next value, or NONE."
@@ -434,7 +477,14 @@ skip: make action! [[
 	#get-definition ACT_SKIP
 ]
 
-;swap
+swap: make action! [[
+		"Swaps elements between two series or the same series."
+		series1  [series!]
+		series2  [series!]
+		return:  [series!]
+	]
+	#get-definition ACT_SWAP
+]
 
 tail: make action! [[
 		"Returns a series at the index after its last value."
@@ -452,8 +502,30 @@ tail?: make action! [[
 	#get-definition ACT_TAIL?
 ]
 
-;take
-;trim
+take: make action! [[
+		"Removes and returns one or more elements."
+		series	 [series!]
+		/part	 "Specifies a length or end position"
+			length [number! series! pair!]
+		/deep	 "Copy nested values"
+		/last	 "Take it from the tail end"
+	]
+	#get-definition ACT_TAKE
+]
+
+trim: make action! [[
+		"Removes space from a string or NONE from a block or object."
+		series	[series! object! error! module!]
+		/head	"Removes only from the head"
+		/tail	"Removes only from the tail"
+		/auto	"Auto indents lines relative to first line"
+		/lines	"Removes all line breaks and extra spaces"
+		/all	"Removes all whitespace"
+		/with	"Same as /all, but removes characters in 'str'"
+			str [char! string! binary! integer!]
+	]
+	#get-definition ACT_TRIM
+]
 
 ;-- I/O actions --
 
@@ -792,6 +864,8 @@ parse: make native! [[
 		rules [block!]
 		/case
 		;/strict
+		/part
+			length [number! series!]
 		/trace
 			callback [function! [
 				event	[word!]
@@ -861,6 +935,93 @@ min: make native! [[
 	#get-definition NAT_MIN
 ]
 
+shift: make native! [[
+		"Perform a bit shift operation. Right shift (decreasing) by default."
+		data	[integer! binary!]
+		bits	[integer!]
+		/left	 "Shift bits to the left (increasing)"
+		/logical "Use logical shift (unsigned, fill with zero)"
+		return: [integer! binary!]
+	]
+	#get-definition NAT_SHIFT
+]
+
+shift-right:   routine [][natives/shift* -1 -1]
+shift-left:	   routine [][natives/shift* 1 -1]
+shift-logical: routine [][natives/shift* -1 1]
+
+to-hex: make native! [[
+		"Converts numeric value to a hex issue! datatype (with leading # and 0's)."
+		value	[integer! tuple!]
+		/size "Specify number of hex digits in result"
+			length [integer!]
+		return: [issue!]
+	]
+	#get-definition NAT_TO_HEX
+]
+
+sine: make native! [[
+		"Returns the trigonometric sine."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_SINE
+]
+
+cosine: make native! [[
+		"Returns the trigonometric cosine."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_COSINE
+]
+
+tangent: make native! [[
+		"Returns the trigonometric tangent."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_TANGENT
+]
+
+arcsine: make native! [[
+		"Returns the trigonometric arcsine (in degrees by default)."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_ARCSINE
+]
+
+arccosine: make native! [[
+		"Returns the trigonometric arccosine (in degrees by default)."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_ARCCOSINE
+]
+
+arctangent: make native! [[
+		"Returns the trigonometric arctangent (in degrees by default)."
+		value	[number!]
+		/radians "Value is specified in radians"
+		return: [float!]
+	]
+	#get-definition NAT_ARCTANGENT
+]
+
+NaN?: make native! [[
+		"Returns TRUE if the number is Not-a-Number."
+		value	[number!]
+		return: [logic!]
+	]
+	#get-definition NAT_NAN?
+]
+
 ;------------------------------------------
 ;-			   Operators				  -
 ;------------------------------------------
@@ -881,6 +1042,12 @@ min: make native! [[
 #load set-word! ">" 	make op! :greater?
 #load set-word! "<="	make op! :lesser-or-equal?
 #load set-word! ">="	make op! :greater-or-equal?
+#load set-word! "<<"	make op! :shift-left
+#load set-word! ">>"	make op! :shift-right
+#load set-word! ">>>"	make op! :shift-logical
+and:					make op! :and~
+or:						make op! :or~
+xor:					make op! :xor~
 
 
 ;------------------------------------------
@@ -901,6 +1068,9 @@ sp: space: 	 #" "
 null: 		 #"^@"
 crlf:		 "^M^/"
 dot:		 #"."
+comma:		 #","
+
+pi: 3.141592653589793
 
 ;------------------------------------------
 ;-			   Mezzanines				  -
@@ -967,6 +1137,7 @@ block?:		 func ["Returns true if the value is this type." value [any-type!]] [bl
 char?: 		 func ["Returns true if the value is this type." value [any-type!]] [char!		= type? :value]
 datatype?:	 func ["Returns true if the value is this type." value [any-type!]] [datatype!	= type? :value]
 file?:		 func ["Returns true if the value is this type." value [any-type!]] [file!		= type? :value]
+url?:		 func ["Returns true if the value is this type." value [any-type!]] [url!		= type? :value]
 function?:	 func ["Returns true if the value is this type." value [any-type!]] [function!	= type? :value]
 get-path?:	 func ["Returns true if the value is this type." value [any-type!]] [get-path!	= type? :value]
 get-word?:	 func ["Returns true if the value is this type." value [any-type!]] [get-word!	= type? :value]
@@ -1128,12 +1299,18 @@ parse-trace: func [
 	input [series!]
 	rules [block!]
 	/case
+	/part
+		limit [integer!]
 	return: [logic! block!]
 ][
 	either case [
 		parse/case/trace input rules :on-parse-event
 	][
-		parse/trace input rules :on-parse-event
+		either part [
+			parse/part/trace input rules limit :on-parse-event
+		][
+			parse/trace input rules :on-parse-event
+		]
 	]
 ]
 
@@ -1145,16 +1322,29 @@ load: function [
 	/header "TBD: Include Red header as a loaded value"
 	/all    "TBD: Don't evaluate Red header"
 	/type	"TBD:"
+	/part
+		length [integer! string!]
 	/into "Put results in out block, instead of creating a new block"
 		out [block!] "Target block for results"
 ][
+	if part [
+		case [
+			zero? length [return make block! 1]
+			string? length [
+				if (index? length) = index? source [
+					return make block! 1
+				]
+			]
+		]
+	]
+	
 	unless out [out: make block! 4]
 	;switch type?/word [
 	;	file!	[]
 	;	url!	[]
 	;	binary! []
 	;]
-	transcode source out
+	either part [transcode/part source out length][transcode source out]
 	unless :all [if 1 = length? out [out: out/1]]
 	out 
 ]

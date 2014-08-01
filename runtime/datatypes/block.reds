@@ -22,6 +22,7 @@ block: context [
 			s	[series!]
 	][
 		s: GET_BUFFER(blk)
+		assert (as-integer (s/tail - s/offset)) >> 4 - blk/head >= 0
 		(as-integer (s/tail - s/offset)) >> 4 - blk/head
 	]
 	
@@ -257,6 +258,41 @@ block: context [
 		arg
 	]
 	
+	select-word: func [
+		blk		[red-block!]
+		word	[red-word!]
+		return: [red-value!]
+		/local
+			value [red-value!]
+			tail  [red-value!]
+			w	  [red-word!]
+			sym	  [integer!]
+	][
+		value: rs-head blk
+		tail:  rs-tail blk
+		sym:   symbol/resolve word/symbol
+		
+		while [value < tail][
+			if any [									;@@ replace with ANY_WORD?
+				TYPE_OF(value) = TYPE_WORD
+				TYPE_OF(value) = TYPE_SET_WORD
+				TYPE_OF(value) = TYPE_GET_WORD
+				TYPE_OF(value) = TYPE_LIT_WORD
+			][
+				w: as red-word! value
+				if sym = symbol/resolve w/symbol [
+					either value + 1 = tail [
+						return none-value
+					][
+						return value + 1
+					]
+				]
+			]
+			value: value + 1
+		]
+		none-value
+	]
+	
 	make-at: func [
 		blk		[red-block!]
 		size	[integer!]
@@ -354,7 +390,7 @@ block: context [
 		]
 		s: GET_BUFFER(buffer)
 		if i <> blk/head [								;-- test if not empty block
-			s/tail: as cell! (as byte-ptr! s/tail) - 1	;-- remove extra white space
+			s/tail: as cell! (as byte-ptr! s/tail) - GET_UNIT(s) ;-- remove extra white space
 			part: part + 1
 		]
 		part
@@ -370,6 +406,8 @@ block: context [
 			s2	   [series!]
 			size1  [integer!]
 			size2  [integer!]
+			type1  [integer!]
+			type2  [integer!]
 			end	   [red-value!]
 			value1 [red-value!]
 			value2 [red-value!]
@@ -380,21 +418,46 @@ block: context [
 		size1: (as-integer s1/tail - s1/offset) >> 4 - blk1/head
 		size2: (as-integer s2/tail - s2/offset) >> 4 - blk2/head
 
-		if size1 <> size2 [								;-- shortcut exit for different sizes
+		either size1 <> size2 [								;-- shortcut exit for different sizes
 			if any [op = COMP_EQUAL op = COMP_STRICT_EQUAL][return false]
 			if op = COMP_NOT_EQUAL [return true]
+		][
+			if zero? size1 [								;-- shortcut exit for empty blocks
+				return any [
+					op = COMP_EQUAL 		op = COMP_STRICT_EQUAL
+					op = COMP_LESSER_EQUAL  op = COMP_GREATER_EQUAL
+				]
+			]
 		]
-		if zero? size1 [								;-- shortcut exit for empty blocks
-			return any [op = COMP_EQUAL op = COMP_STRICT_EQUAL]
-		]
-		
+
+		if op = COMP_LESSER [op: COMP_LESSER_EQUAL]
+		if op = COMP_GREATER [op: COMP_GREATER_EQUAL]
+
 		value1: s1/offset + blk1/head
 		value2: s2/offset + blk2/head
-		end: s1/tail									;-- only one "end" is needed
+		end: s1/tail										;-- only one "end" is needed
+
 		until [
-			res: actions/compare value1 value2 op
-			value1: value1 + 1
-			value2: value2 + 1
+			type1: TYPE_OF(value1)
+			type2: TYPE_OF(value2)
+			either any [
+				type1 = type2
+				all [word/any-word? type1 word/any-word? type2]
+				all [type1 = TYPE_INTEGER type2 = TYPE_INTEGER]	 ;@@ replace by ANY_NUMBER?
+			][
+				res: actions/compare value1 value2 op
+				value1: value1 + 1
+				value2: value2 + 1
+			][
+				switch op [
+					COMP_EQUAL
+					COMP_STRICT_EQUAL	[res: false]
+					COMP_NOT_EQUAL 		[res: true]
+					COMP_LESSER_EQUAL	[res: type1 <= type2]
+					COMP_GREATER_EQUAL	[res: type1 >= type2]
+				]
+				return res
+			]
 			any [
 				not res
 				value1 >= end
@@ -427,6 +490,51 @@ block: context [
 		if zero? size [size: 1]
 		make-at as red-block! stack/push* size
 	]
+
+	random: func [
+		blk		[red-block!]
+		seed?	[logic!]
+		secure? [logic!]
+		only?   [logic!]
+		return: [red-value!]
+		/local
+			s	 [series!]
+			size [integer!]
+			temp [red-value!]
+			idx	 [red-value!]
+			head [red-value!]
+	][
+		#if debug? = yes [if verbose > 0 [print-line "block/random"]]
+
+		either seed? [
+			blk/header: TYPE_UNSET						;-- TODO: calc block as seed
+		][
+			s: GET_BUFFER(blk)
+			head: s/offset + blk/head
+			size: rs-length? blk
+
+			if only? [
+				either positive? size [
+					idx: head + (_random/rand % size)
+					copy-cell idx as cell! blk
+				][
+					blk/header: TYPE_NONE
+				]
+			]
+
+			temp: stack/push*
+			while [size > 0][
+				idx: head + (_random/rand % size)
+				copy-cell head temp
+				copy-cell idx head
+				copy-cell temp idx
+				head: head + 1
+				size: size - 1
+			]
+			stack/pop 1
+		]
+		as red-value! blk
+	]
 	
 	form: func [
 		blk		  [red-block!]
@@ -458,16 +566,12 @@ block: context [
 			i: i + 1
 			value: s/offset + i
 			
-			if all [
-				part <> prev
-				value < s/tail
-			][
+			if value < s/tail [
 				buf:  GET_BUFFER(buffer)
 				unit: GET_UNIT(buf)
 				c: string/get-char (as byte-ptr! buf/tail) - unit unit
 				
 				unless any [
-					c = as-integer #" "
 					c = as-integer #"^/"
 					c = as-integer #"^M"
 					c = as-integer #"^-"
@@ -483,11 +587,6 @@ block: context [
 		if s/offset < s/tail [
 			unit: GET_UNIT(s)
 			i: string/get-char (as byte-ptr! s/tail) - unit unit
-			
-			if i = as-integer space [
-				s/tail: as red-value! ((as byte-ptr! s/tail) - unit)  ;-- trim tail space
-				part: part + 1
-			]
 		]
 		part
 	]
@@ -554,7 +653,7 @@ block: context [
 					actions/poke as red-series! element 2 stack/arguments null
 					stack/arguments
 				][
-					select parent element null no no no null null no no
+					select-word as red-block! parent as red-word! element
 				]
 			]
 			default [
@@ -1163,7 +1262,192 @@ block: context [
 		]
 		blk
 	]
-	
+
+	reverse: func [
+		blk	 	 [red-block!]
+		part-arg [red-value!]
+		return:	 [red-block!]
+		/local
+			s		[series!]
+			part	[integer!]
+			size	[integer!]
+			head	[red-value!]
+			end		[red-value!]
+			tmp		[red-value!]
+			int		[red-integer!]
+			b		[red-block!]
+	][
+		s: GET_BUFFER(blk)
+		head: s/offset + blk/head
+		if head = s/tail [return blk]		;-- early exit if nothing to reverse
+		size: rs-length? blk
+
+		part: size
+
+		if OPTION?(part-arg) [
+			part: either TYPE_OF(part-arg) = TYPE_INTEGER [
+				int: as red-integer! part-arg
+				int/value
+			][
+				b: as red-block! part-arg
+				assert all [
+					TYPE_OF(b) = TYPE_BLOCK
+					b/node = blk/node
+				]
+				b/head - blk/head
+			]
+			if part <= 0 [return blk]		;-- early exit if negative /part index
+		]
+		if part > size [part: size] 		;-- truncate if off-range part value
+
+		end: head + part - 1
+		tmp: stack/push*
+		while [head < end][
+			copy-cell head tmp
+			copy-cell end head
+			copy-cell tmp end
+			head: head + 1
+			end: end - 1
+		]
+		stack/pop 1
+		blk
+	]
+
+	take: func [
+		blk	    	[red-block!]
+		part-arg	[red-value!]
+		deep?		[logic!]
+		last?		[logic!]
+		return:		[red-value!]
+		/local
+			int		[red-integer!]
+			b		[red-block!]
+			new		[red-block!]
+			offset	[red-value!]
+			slot	[red-value!]
+			buffer	[series!]
+			node	[node!]
+			part	[integer!]
+			slots	[integer!]
+			type	[integer!]
+	][
+		#if debug? = yes [if verbose > 0 [print-line "block/take"]]
+
+		s: GET_BUFFER(blk)
+		slots: rs-length? blk
+		if slots <= 0 [								;-- return NONE if blk is empty
+			set-type as cell! blk TYPE_NONE
+			return as red-value! blk
+		]
+
+		offset: s/offset + blk/head
+		part:   1
+
+		if OPTION?(part-arg) [
+			part: either TYPE_OF(part-arg) = TYPE_INTEGER [
+				int: as red-integer! part-arg
+				int/value
+			][
+				b: as red-block! part-arg
+				assert all [
+					TYPE_OF(b) = TYPE_BLOCK
+					b/node = blk/node
+				]
+				either b/head < blk/head [0][
+					either last? [slots - (b/head - blk/head)][b/head - blk/head]
+				]
+			]
+			if part > slots [part: slots]
+		]
+
+		new:		as red-block! stack/push*
+		new/header: TYPE_BLOCK
+		new/node: 	alloc-cells part + 1
+		new/head: 	0
+		buffer: 	as series! new/node/value
+
+		either positive? part [
+			if last? [
+				offset: s/tail - part
+				s/tail: offset
+			]
+			copy-memory
+				as byte-ptr! buffer/offset
+				as byte-ptr! offset
+				part << 4
+			buffer/tail: buffer/offset + part
+
+			unless last? [
+				move-memory
+					as byte-ptr! offset
+					as byte-ptr! offset + part
+					as-integer s/tail - (offset + part)
+				s/tail: s/tail - part
+			]
+		][return as red-value! new]
+
+		if deep? [
+			slot: buffer/offset
+			until [
+				type: TYPE_OF(slot)
+				if ANY_SERIES?(type) [
+					actions/copy
+						as red-series! slot
+						slot						;-- overwrite the slot value
+						null
+						yes
+						null
+				]
+				slot: slot + 1
+				slot >= buffer/tail
+			]
+		]
+
+		if part = 1	[								;-- flatten block
+			copy-cell as cell! buffer/offset as cell! new
+		]
+		as red-value! new
+	]
+
+	swap: func [
+		blk1	   [red-block!]
+		blk2	   [red-block!]
+		return:	   [red-block!]
+		/local
+			s		[series!]
+			i		[integer!]
+			tmp		[integer!]
+			h1		[int-ptr!]
+			h2		[int-ptr!]
+	][
+		#if debug? = yes [if verbose > 0 [print-line "block/swap"]]
+
+		if TYPE_OF(blk2) <> TYPE_BLOCK [
+			print-line "*** Error: invalid value for series2 argument!"
+			halt
+			null
+		]
+		s: GET_BUFFER(blk1)
+		h1: as int-ptr! s/offset + blk1/head
+		if s/tail = as red-value! h1 [return blk1]		;-- early exit if nothing to swap
+
+		s: GET_BUFFER(blk2)
+		h2: as int-ptr! s/offset + blk2/head
+		if s/tail = as red-value! h2 [return blk1]		;-- early exit if nothing to swap
+
+		i: 0
+		until [
+			tmp: h1/value
+			h1/value: h2/value
+			h2/value: tmp
+			h1: h1 + 1
+			h2: h2 + 1
+			i:	i + 1
+			i = 4
+		]
+		blk1
+	]
+
 	;--- Misc actions ---
 	
 	copy: func [
@@ -1237,16 +1521,7 @@ block: context [
 			slot: buffer/offset
 			until [
 				type: TYPE_OF(slot)
-				if any [								;@@ replace with ANY_SERIES?
-					type = TYPE_BLOCK
-					type = TYPE_PAREN
-					type = TYPE_PATH
-					type = TYPE_GET_PATH
-					type = TYPE_SET_PATH
-					type = TYPE_LIT_PATH
-					type = TYPE_STRING
-					type = TYPE_FILE
-				][
+				if ANY_SERIES?(type) [
 					actions/copy 
 						as red-series! slot
 						slot						;-- overwrite the slot value
@@ -1269,7 +1544,7 @@ block: context [
 			"block!"
 			;-- General actions --
 			:make
-			null			;random
+			:random
 			null			;reflect
 			null			;to
 			:form
@@ -1311,14 +1586,14 @@ block: context [
 			:pick
 			:poke
 			:remove
-			null			;reverse
+			:reverse
 			:select
 			null			;sort
 			:skip
-			null			;swap
+			:swap
 			:tail
 			:tail?
-			null			;take
+			:take
 			null			;trim
 			;-- I/O actions --
 			null			;create

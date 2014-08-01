@@ -21,8 +21,9 @@ target: ask {
 Choose ARM target:
 1) Linux
 2) Android
+3) Linux armhf
 => }
-target: pick ["Linux-ARM" "Android"] to-integer target
+target: pick ["Linux-ARM" "Android" "RPi"] to-integer target
 
 ;; make the Arm dir if needed
 arm-dir: %runnable/arm-tests/
@@ -42,7 +43,7 @@ parse/all all-tests [
 ;; compile the tests into to runnable/arm-tests
  
 foreach test-file test-files [
-  do/args %../../red.r rejoin ["-t " target " " test-file]
+  do/args %../red.r rejoin ["-t " target " " test-file]
   exe: copy find/last/tail test-file "/"
   exe: replace exe ".red" ""
   write/binary join %runnable/arm-tests/ exe read/binary exe

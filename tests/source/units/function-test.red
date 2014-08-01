@@ -139,7 +139,7 @@ Red [
 		ret5: does [return either false [12][34]]
 		--assert 34 = ret5
 		
-	--test-- "fun-ret-6"
+	--test-- "fun-ret-6"								;-- issue #770
 		ret6: func [i [integer!]][
 			until [
 				if true [
@@ -155,6 +155,59 @@ Red [
 		]
 		--assert 0 = ret6 0
 		--assert 2 = ret6 1
+
+	--test-- "fun-ret-7"
+		f: function [][
+			blk: [1 2 3 4 5]
+			foreach i blk [
+				case [
+					i > 1 [return i]
+				]
+			]
+		]
+		g: function [][if f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-8"
+		f: function [][
+		    case [
+		        2 > 1 [return true]
+		    ]
+		]
+		g: function [][if f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-9"
+		f: function [][if true [return true]]
+		g: function [][if f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-10"
+		g: function [][if true [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-10"
+		f: function [][true]
+		g: function [][if f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-11"
+		f: function [][if true [return true]]
+		g: function [][if (f) [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-12"
+		f: function [][if true [return true] ]
+		g: function [][if not not f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-13"
+		f: function [][if true [return 'X]]
+		g: function [][if f [return 1]]
+		--assert g = 1
+
+	--test-- "fun-ret-14"								;-- issue #778
+	 	--assert 1 = do load "f: func [][return 1] t: f"
 		
 
 ===end-group===
@@ -309,6 +362,63 @@ Red [
 			--assert 5 *+* 6 *** 7 = 1067
 	]
 
+===end-group===
+
+===start-group=== "Scope of Varibles"
+
+	--test-- "scope1 issue #825"
+		s1-text: "abcde"
+		s1-f: function [/extern s1-text] [
+			s1-text
+		]
+		--assert s1-f = "abcde"
+		
+	--test-- "scope2 issue #825"
+		s2-f: function [/extern s2-text] [
+			s2-text
+		]
+		s2-text: "abcde"
+		--assert s2-f = "abcde"
+		
+	--test-- "scope3 issue #825"
+		s3-text: "abcde"
+		s3-f: func [/local s3-text] [
+			s3-text: "12345"	
+		]
+
+	--test-- "scope4 issue #825"
+		s4-text: "abcde"
+		s4-f: function [extern s4-text] [
+			if extern [s4-text: "12345"]
+			s4-text
+		]
+		--assert "12345" = s4-f true "00000"
+		
+	--test-- "scope5 issue #825"
+		s5-text: "abcde"
+		s5-f: func[/extern s5-text] [
+			either extern [
+				s5-text	
+			][
+				"00000"
+			]
+		]
+		--assert "12345" s5-f/extern "12345"
+		
+	--test-- "scope6 issue #825"
+		s6-text: "abcde"
+		s6-f: func [local s6-text] [
+			s6-text
+		]
+		--assert "12345" = s6-f "filler" "12345"
+		
+	--test-- "scope7 issue #825"
+		s7-text: "abcde"
+		s7-f: function [local s7-text] [
+			s7-text
+		]
+		--assert "12345" = s7-f "filler" "12345"
+		
 ===end-group===
 
 ~~~end-file~~~
